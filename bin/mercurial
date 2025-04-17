@@ -1,0 +1,31 @@
+#!/usr/bin/env ruby
+# mercurial
+
+# 20250417
+# 0.0.0
+
+def wireguard_config_location
+  File.join(%w{~ .config wireguard})
+end
+
+def wireguard_configs_path
+  File.expand_path(wireguard_config_location)
+end
+
+def wireguard_config_files
+  Dir.glob("#{wireguard_configs_path}/*.conf")
+end
+
+def random_wireguard_config_file
+  wireguard_config_files.sample
+end
+
+def load_wireguard_config
+  system("wg-quick up #{random_wireguard_config_file}")
+end
+
+def main
+  load_wireguard_config
+end
+
+main
