@@ -1,8 +1,8 @@
 #!/usr/bin/env ruby
 # mercurial
 
-# 20250417
-# 0.1.0
+# 20250418
+# 0.1.1
 
 require 'fileutils'
 
@@ -39,19 +39,19 @@ def up
 end
 
 def current_wireguard_config_filename
-  Dir.glob('/tmp/mercurial.*.tmp').first
+  tmpfilename = Dir.glob('/tmp/mercurial-*.tmp').last
+  File.read(tmpfilename)
 end
 
 def down
-  tmpfilename = Dir.glob('/tmp/mercurial-*.tmp').first
-  current_wireguard_config_filename = File.read(tmpfilename)
   unload_wireguard_config(current_wireguard_config_filename)
-  Dir.glob('/tmp/mercurial-*.tmp').each{|filename| FileUtils.rm(filename)}
 rescue Errno::ENOENT # If the tmpfile doesn't exist (wireguard was started without mercurial), then try each one until we have a winner!
-  wireguard_config_filenames.each do |wireguard_config_filenames|
-    `wg-quick down #{wireguard_config_filenames}`
+  wireguard_config_filenames.each do |wireguard_config_filename|
+    unload_wireguard_config(wireguard_config_filename)
     break if $?.exitstatus == 0
   end
+ensure
+  Dir.glob('/tmp/mercurial-*.tmp').each{|filename| FileUtils.rm(filename)}
 end
 
 def up?
