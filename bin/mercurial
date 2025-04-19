@@ -2,9 +2,52 @@
 # mercurial
 
 # 20250419
-# 0.1.2
+# 0.2.0
+
+# Changes:
+# -/0: + setup sub-command
+# 1. + setup()
+# 2. + wireguard_tools_installed?()
+# 3. + homebrew_installed?()
+# 4. + check_for_wg_program()
+# 5. + enter_admin_password
+# 6. + require 'FileUtils/which'
+# 7. + require 'Kernel/run'
+# 8. ~ main()
 
 require 'fileutils'
+
+require 'FileUtils/which'
+require 'Kernel/run'
+
+def setup
+  unless homebrew_installed?
+    run('/usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"', show: true)
+  end
+  unless wireguard_tools_installed?
+    run('brew install wireguard-tools', show: true)
+  end
+end
+
+def homebrew_installed?
+  FileUtils.which('brew')
+end
+
+def wireguard_tools_installed?
+  FileUtils.which('wg-quick')
+end
+
+def check_for_wg_program
+  unless wireguard_tools_installed?
+    puts "wg-quick was not found.  You must install wireguard-tools (installs wg-quick) first."
+    puts "The easist way to install it is by running `mercurial setup`."
+    exit
+  end
+end
+
+def enter_admin_password
+  system('sudo -v')
+end
 
 def wireguard_config_location
   File.join(%w{~ .config wireguard})
@@ -64,8 +107,14 @@ def up?
 end
 
 def main
-  down if up?
-  up
+  if ARGV[0] == 'setup'
+    setup
+  else
+    check_for_wg_program
+    enter_admin_password
+    down if up?
+    up
+  end
 end
 
 main
