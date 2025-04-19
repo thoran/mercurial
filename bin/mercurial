@@ -2,7 +2,7 @@
 # mercurial
 
 # 20250419
-# 0.2.0
+# 0.2.1
 
 # Changes:
 # -/0: + setup sub-command
@@ -14,11 +14,15 @@
 # 6. + require 'FileUtils/which'
 # 7. + require 'Kernel/run'
 # 8. ~ main()
+# 0/1: Employ a different means of detecting if wireguard is running.
+# 9. + require 'MacOS/IfConfig'
+# 10. ~ up?()
 
 require 'fileutils'
 
 require 'FileUtils/which'
 require 'Kernel/run'
+require 'MacOS/IfConfig'
 
 def setup
   unless homebrew_installed?
@@ -102,8 +106,7 @@ def down
 end
 
 def up?
-  system('wg show')
-  $?.exitstatus == 1
+  MacOS::IfConfig.up_interfaces.detect{|ifconfig| ifconfig.interface.match(/utun/)}
 end
 
 def main
