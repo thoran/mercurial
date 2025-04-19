@@ -2,21 +2,11 @@
 # mercurial
 
 # 20250419
-# 0.2.1
+# 0.3.0
 
-# Changes:
-# -/0: + setup sub-command
-# 1. + setup()
-# 2. + wireguard_tools_installed?()
-# 3. + homebrew_installed?()
-# 4. + check_for_wg_program()
-# 5. + enter_admin_password
-# 6. + require 'FileUtils/which'
-# 7. + require 'Kernel/run'
-# 8. ~ main()
-# 0/1: Employ a different means of detecting if wireguard is running.
-# 9. + require 'MacOS/IfConfig'
-# 10. ~ up?()
+# Changes since 0.2:
+# -/0: + down sub-command
+# 1. ~ main()
 
 require 'fileutils'
 
@@ -110,8 +100,9 @@ def up?
 end
 
 def main
-  if ARGV[0] == 'setup'
-    setup
+  case ARGV[0]
+  when 'setup'; setup
+  when 'down'; down if up?
   else
     check_for_wg_program
     enter_admin_password
