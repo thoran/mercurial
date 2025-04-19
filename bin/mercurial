@@ -2,7 +2,9 @@
 # mercurial
 
 # 20250417
-# 0.0.0
+# 0.1.0
+
+require 'fileutils'
 
 def wireguard_config_location
   File.join(%w{~ .config wireguard})
@@ -12,20 +14,54 @@ def wireguard_configs_path
   File.expand_path(wireguard_config_location)
 end
 
-def wireguard_config_files
+def wireguard_config_filenames
   Dir.glob("#{wireguard_configs_path}/*.conf")
 end
 
-def random_wireguard_config_file
-  wireguard_config_files.sample
+def random_wireguard_config_filename
+  wireguard_config_filenames.sample
 end
 
-def load_wireguard_config
-  system("wg-quick up #{random_wireguard_config_file}")
+def load_wireguard_config(wireguard_config_filename)
+  system("wg-quick up #{wireguard_config_filename}")
+end
+
+def unload_wireguard_config(wireguard_config_filename)
+  system("wg-quick down #{wireguard_config_filename}")
+end
+
+def up
+  wireguard_config_filename = random_wireguard_config_filename
+  load_wireguard_config(wireguard_config_filename)
+  tmpfile = File.open("/tmp/mercurial-#{Time.now}.tmp", 'w+')
+  tmpfile.puts(wireguard_config_filename)
+  tmpfile.close
+end
+
+def current_wireguard_config_filename
+  Dir.glob('/tmp/mercurial.*.tmp').first
+end
+
+def down
+  tmpfilename = Dir.glob('/tmp/mercurial-*.tmp').first
+  current_wireguard_config_filename = File.read(tmpfilename)
+  unload_wireguard_config(current_wireguard_config_filename)
+  Dir.glob('/tmp/mercurial-*.tmp').each{|filename| FileUtils.rm(filename)}
+rescue Errno::ENOENT # If the tmpfile doesn't exist (wireguard was started without mercurial), then try each one until we have a winner!
+  wireguard_config_filenames.each do |wireguard_config_filenames|
+    `wg-quick down #{wireguard_config_filenames}`
+    break if $?.exitstatus == 0
+  end
+end
+
+def up?
+  system('wg show')
+  $?.exitstatus == 1
 end
 
 def main
-  load_wireguard_config
+  down if up?
+  up
 end
 
 main
