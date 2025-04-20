@@ -1,13 +1,16 @@
 #!/usr/bin/env ruby
 # mercurial
 
-# 20250419
-# 0.4.0
+# 20250420
+# 0.4.1
 
 # Changes since 0.3:
 # -/0: + switch sub-command (No change in functionality.)
 # 1. + switch()
 # 2. ~ main()
+# 0/1: It will prompt for the admin password if necessary and I'm trying to make it unnecessary.
+# 3. - enter_admin_password()
+# 4. ~ switch(): - enter_admin_password
 
 require 'fileutils'
 
@@ -38,10 +41,6 @@ def check_for_wg_quick_program
     puts "The easist way to install it is by running `mercurial setup`."
     exit
   end
-end
-
-def enter_admin_password
-  system('sudo -v')
 end
 
 def wireguard_config_location
@@ -98,7 +97,6 @@ end
 
 def switch
   check_for_wg_quick_program
-  enter_admin_password
   down if up?
   up
 end
