@@ -2,11 +2,12 @@
 # mercurial
 
 # 20250419
-# 0.3.0
+# 0.4.0
 
-# Changes since 0.2:
-# -/0: + down sub-command
-# 1. ~ main()
+# Changes since 0.3:
+# -/0: + switch sub-command (No change in functionality.)
+# 1. + switch()
+# 2. ~ main()
 
 require 'fileutils'
 
@@ -31,7 +32,7 @@ def wireguard_tools_installed?
   FileUtils.which('wg-quick')
 end
 
-def check_for_wg_program
+def check_for_wg_quick_program
   unless wireguard_tools_installed?
     puts "wg-quick was not found.  You must install wireguard-tools (installs wg-quick) first."
     puts "The easist way to install it is by running `mercurial setup`."
@@ -95,6 +96,13 @@ def down
   Dir.glob('/tmp/mercurial-*.tmp').each{|filename| FileUtils.rm(filename)}
 end
 
+def switch
+  check_for_wg_quick_program
+  enter_admin_password
+  down if up?
+  up
+end
+
 def up?
   MacOS::IfConfig.up_interfaces.detect{|ifconfig| ifconfig.interface.match(/utun/)}
 end
@@ -103,11 +111,9 @@ def main
   case ARGV[0]
   when 'setup'; setup
   when 'down'; down if up?
+  when 'switch'; switch
   else
-    check_for_wg_program
-    enter_admin_password
-    down if up?
-    up
+    switch
   end
 end
 
