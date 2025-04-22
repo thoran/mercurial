@@ -1,8 +1,8 @@
 #!/usr/bin/env ruby
 # mercurial
 
-# 20250420
-# 0.4.1
+# 2025042
+# 0.4.2
 
 # Changes since 0.3:
 # -/0: + switch sub-command (No change in functionality.)
@@ -11,6 +11,9 @@
 # 0/1: It will prompt for the admin password if necessary and I'm trying to make it unnecessary.
 # 3. - enter_admin_password()
 # 4. ~ switch(): - enter_admin_password
+# 1/2: Ensure that the next random config is not the same as the last one.
+# 5. ~ random_wireguard_config_filename(): Ensure that the next random config is not the same as the last one.
+# 6. ~ up(): /puts/print/, so as to ensure that the paths are comparable so that there are no trailing linefeeds.
 
 require 'fileutils'
 
@@ -56,7 +59,14 @@ def wireguard_config_filenames
 end
 
 def random_wireguard_config_filename
-  wireguard_config_filenames.sample
+  different_wireguard_config_filename = false
+  until different_wireguard_config_filename do
+    new_random_wireguard_config_filename = wireguard_config_filenames.sample
+    if new_random_wireguard_config_filename != current_wireguard_config_filename
+      different_wireguard_config_filename = true
+    end
+  end
+  new_random_wireguard_config_filename
 end
 
 def load_wireguard_config(wireguard_config_filename)
@@ -71,7 +81,7 @@ def up
   wireguard_config_filename = random_wireguard_config_filename
   load_wireguard_config(wireguard_config_filename)
   tmpfile = File.open("/tmp/mercurial-#{Time.now}.tmp", 'w+')
-  tmpfile.puts(wireguard_config_filename)
+  tmpfile.print(wireguard_config_filename)
   tmpfile.close
 end
 
