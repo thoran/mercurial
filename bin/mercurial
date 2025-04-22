@@ -1,8 +1,8 @@
 #!/usr/bin/env ruby
 # mercurial
 
-# 2025042
-# 0.4.2
+# 20250422
+# 0.4.3
 
 # Changes since 0.3:
 # -/0: + switch sub-command (No change in functionality.)
@@ -14,6 +14,8 @@
 # 1/2: Ensure that the next random config is not the same as the last one.
 # 5. ~ random_wireguard_config_filename(): Ensure that the next random config is not the same as the last one.
 # 6. ~ up(): /puts/print/, so as to ensure that the paths are comparable so that there are no trailing linefeeds.
+# 2/3: Cleanup the implementation for selecting the next server.
+# 7. ~ random_wireguard_config_filename(): Sample from the reduced pool.
 
 require 'fileutils'
 
@@ -59,14 +61,7 @@ def wireguard_config_filenames
 end
 
 def random_wireguard_config_filename
-  different_wireguard_config_filename = false
-  until different_wireguard_config_filename do
-    new_random_wireguard_config_filename = wireguard_config_filenames.sample
-    if new_random_wireguard_config_filename != current_wireguard_config_filename
-      different_wireguard_config_filename = true
-    end
-  end
-  new_random_wireguard_config_filename
+  (wireguard_config_filenames - [current_wireguard_config_filename]).sample
 end
 
 def load_wireguard_config(wireguard_config_filename)
