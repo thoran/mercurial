@@ -1,27 +1,35 @@
 #!/usr/bin/env ruby
 # mercurial
 
-# 20250422
-# 0.4.3
+# 20250925
+# 0.5.0
 
-# Changes since 0.3:
-# -/0: + switch sub-command (No change in functionality.)
-# 1. + switch()
-# 2. ~ main()
-# 0/1: It will prompt for the admin password if necessary and I'm trying to make it unnecessary.
-# 3. - enter_admin_password()
-# 4. ~ switch(): - enter_admin_password
-# 1/2: Ensure that the next random config is not the same as the last one.
-# 5. ~ random_wireguard_config_filename(): Ensure that the next random config is not the same as the last one.
-# 6. ~ up(): /puts/print/, so as to ensure that the paths are comparable so that there are no trailing linefeeds.
-# 2/3: Cleanup the implementation for selecting the next server.
-# 7. ~ random_wireguard_config_filename(): Sample from the reduced pool.
+# Changes since 0.4:
+# -/0: Be able to set DNS.
+# 1. + require 'switches.rb'
+# 2. + switches(), dns_servers(): Parse DNS servers from command line (-d/--dns/--dns_server)
+# 3. ~ up(), switch(), main(): Accept and pass through DNS servers argument.
+# 4. + dns_altered_wireguard_config(): Modifies Wireguard config to use custom DNS servers.
+# 5. + write_dns_altered_wireguard_config(): Creates a temporary config with custom DNS.
+# 6. ~ down(): Clean up /tmp/wireguard/*.conf files.
+# 7. ~ *_filename()/*_filepath()/
+# 8. + require 'MacOS/VPN'
+# 9. ~ up(): Use MacOS::VPN.up?
+
+# Examples:
+# 1. `mercurial setup` installs requisite software.
+# 2. `mercurial switch` brings up the VPN, if need be, or if already up with swap the current for another different exit node.
+# 3. `mercurial` is the same as `mercurial switch`.
+# 4. `mercurial down` brings the VPN down.
+# 5. `mercurial switch --dns_servers 1.1.1.1,1.0.0.1` brings up the VPN with the given DNS servers.
 
 require 'fileutils'
+require 'switches.rb'
 
 require 'FileUtils/which'
 require 'Kernel/run'
 require 'MacOS/IfConfig'
+require 'MacOS/VPN'
 
 def setup
   unless homebrew_installed?
@@ -56,32 +64,64 @@ def wireguard_configs_path
   File.expand_path(wireguard_config_location)
 end
 
-def wireguard_config_filenames
+def wireguard_configs_filepaths
   Dir.glob("#{wireguard_configs_path}/*.conf")
 end
 
-def random_wireguard_config_filename
-  (wireguard_config_filenames - [current_wireguard_config_filename]).sample
+def random_wireguard_config_filepath
+  current_wireguard_config = current_wireguard_config_filepath
+  non_current_wireguard_configs = (
+    if current_wireguard_config
+      (wireguard_configs_filepaths - [current_wireguard_config])
+    else
+      wireguard_configs_filepaths
+    end
+  )
+  non_current_wireguard_configs.sample
 end
 
 def load_wireguard_config(wireguard_config_filename)
-  system("wg-quick up #{wireguard_config_filename}")
+  run("wg-quick up #{wireguard_config_filename}", show: true)
 end
 
 def unload_wireguard_config(wireguard_config_filename)
-  system("wg-quick down #{wireguard_config_filename}")
+  run("wg-quick down #{wireguard_config_filename}", show: true)
 end
 
-def up
-  wireguard_config_filename = random_wireguard_config_filename
-  load_wireguard_config(wireguard_config_filename)
-  tmpfile = File.open("/tmp/mercurial-#{Time.now}.tmp", 'w+')
-  tmpfile.print(wireguard_config_filename)
-  tmpfile.close
+def write_dns_altered_wireguard_config(wireguard_config_filepath, dns_altered_wireguard_config)
+  wireguard_config_filename = File.basename(wireguard_config_filepath)
+  FileUtils.mkdir_p('/tmp/wireguard')
+  dns_altered_wireguard_config_filepath = "/tmp/wireguard/#{wireguard_config_filename}"
+  wireguard_config = File.open(dns_altered_wireguard_config_filepath, 'w', 0o600)
+  wireguard_config.puts(dns_altered_wireguard_config)
+  wireguard_config.close
+  dns_altered_wireguard_config_filepath
 end
 
-def current_wireguard_config_filename
-  @current_wireguard_config_filename ||= (
+def dns_altered_wireguard_config(wireguard_config_filepath, dns_servers)
+  config = File.read(wireguard_config_filepath)
+  config.gsub(/^DNS = .+$/, "DNS = #{dns_servers.join(', ')}")
+end
+
+def up(dns_servers = nil)
+  wireguard_config_filepath = random_wireguard_config_filepath
+  if dns_servers
+    dns_altered_wireguard_config = dns_altered_wireguard_config(wireguard_config_filepath, dns_servers)
+    dns_altered_wireguard_config_filepath = write_dns_altered_wireguard_config(wireguard_config_filepath, dns_altered_wireguard_config)
+    load_wireguard_config(dns_altered_wireguard_config_filepath)
+    tmpfile = File.open("/tmp/mercurial-#{Time.now}.tmp", 'w')
+    tmpfile.print(dns_altered_wireguard_config_filepath)
+    tmpfile.close
+  else
+    load_wireguard_config(wireguard_config_filepath)
+    tmpfile = File.open("/tmp/mercurial-#{Time.now}.tmp", 'w')
+    tmpfile.print(wireguard_config_filepath)
+    tmpfile.close
+  end
+end
+
+def current_wireguard_config_filepath
+  @current_wireguard_config_filepath ||= (
     if tmpfilename = Dir.glob('/tmp/mercurial-*.tmp').last
       File.read(tmpfilename)
     end
@@ -89,34 +129,48 @@ def current_wireguard_config_filename
 end
 
 def down
-  if current_wireguard_config_filename
-    unload_wireguard_config(current_wireguard_config_filename)
+  if current_wireguard_config_filepath
+    unload_wireguard_config(current_wireguard_config_filepath)
   else
-    wireguard_config_filenames.each do |wireguard_config_filename|
-      unload_wireguard_config(wireguard_config_filename)
+    wireguard_configs_filepaths.each do |wireguard_config_filepath|
+      unload_wireguard_config(wireguard_config_filepath)
       break if $?.exitstatus == 0
     end
   end
   Dir.glob('/tmp/mercurial-*.tmp').each{|filename| FileUtils.rm(filename)}
+  Dir.glob('/tmp/wireguard/*.conf').each{|filename| FileUtils.rm(filename)}
 end
 
-def switch
+def switch(dns_servers = nil)
   check_for_wg_quick_program
   down if up?
-  up
+  up(dns_servers)
 end
 
 def up?
-  MacOS::IfConfig.up_interfaces.detect{|ifconfig| ifconfig.interface.match(/utun/)}
+  MacOS::VPN.up?
+end
+
+def switches
+  @switches ||= (
+    Switches.new do |s|
+      s.set :d, :dns, :dns_servers
+    end
+  )
+end
+
+def dns_servers
+  switches.dns_servers&.split(',')
 end
 
 def main
+  switches
   case ARGV[0]
   when 'setup'; setup
   when 'down'; down if up?
-  when 'switch'; switch
+  when 'switch'; switch(dns_servers)
   else
-    switch
+    switch(dns_servers)
   end
 end
 
