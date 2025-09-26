@@ -2,7 +2,7 @@
 # mercurial
 
 # 20250926
-# 0.5.1
+# 0.5.2
 
 # Changes since 0.4:
 # -/0: Be able to set DNS.
@@ -20,6 +20,9 @@
 # 11. + random_wireguard_config(): Select random config by basename, properly excluding current.
 # 12. ~ random_wireguard_config_filepath(): Use basename-based selection to build filepath.
 # 13. ~ up(): Eliminate conditional duplication by reassigning wireguard_config_filepath.
+# 1/2: Fix for when current config missing when finding next random config.
+# 14. ~ random_wireguard_config(): Defer to current_wireguard_config() rather than derive it in place.
+# 15. + current_wireguard_config(): Check for presence of the path before getting the basename.
 
 # Examples:
 # 1. `mercurial setup` installs requisite software.
@@ -78,12 +81,11 @@ def wireguard_configs
 end
 
 def random_wireguard_config
-  current_wireguard_config = File.basename(current_wireguard_config_filepath)
   non_current_wireguard_configs = (
     if current_wireguard_config
       (wireguard_configs - [current_wireguard_config])
     else
-      wireguard_configs_filepaths
+      wireguard_configs
     end
   )
   non_current_wireguard_configs.sample
@@ -134,6 +136,10 @@ def current_wireguard_config_filepath
       File.read(tmpfilename)
     end
   )
+end
+
+def current_wireguard_config
+  File.basename(current_wireguard_config_filepath) if current_wireguard_config_filepath
 end
 
 def down
