@@ -2,7 +2,7 @@
 # mercurial
 
 # 20250926
-# 0.5.2
+# 0.5.3
 
 # Changes since 0.4:
 # -/0: Be able to set DNS.
@@ -23,6 +23,10 @@
 # 1/2: Fix for when current config missing when finding next random config.
 # 14. ~ random_wireguard_config(): Defer to current_wireguard_config() rather than derive it in place.
 # 15. + current_wireguard_config(): Check for presence of the path before getting the basename.
+# 2/3: Refactor wg-quick path lookup and use sudo when calling wg-quick.
+# 16. + wg_quick_path(): Centralize wg-quick path lookup with memoization.
+# 17. ~ wireguard_tools_installed?(): Use wg_quick_path instead of duplicate lookup.
+# 18. ~ load_wireguard_config(), unload_wireguard_config(): Add sudo and use wg_quick_path.
 
 # Examples:
 # 1. `mercurial setup` installs requisite software.
@@ -31,6 +35,12 @@
 # 4. `mercurial down` brings the VPN down.
 # 5. `mercurial switch --dns_servers 1.1.1.1,1.0.0.1` brings up the VPN with the given DNS servers.
 
+# Notes:
+# 1. For automated execution, ensure that /etc/sudoers has an entry like this:
+#   thoran    ALL = NOPASSWD: /opt/homebrew/bin/wg-quick *
+# 2. Or, that there's a file /etc/sudoers.d/mercurial which the same kind of entry:
+#   thoran    ALL = NOPASSWD: /opt/homebrew/bin/wg-quick *
+
 require 'fileutils'
 require 'switches.rb'
 
@@ -38,6 +48,10 @@ require 'FileUtils/which'
 require 'Kernel/run'
 require 'MacOS/IfConfig'
 require 'MacOS/VPN'
+
+def wg_quick_path
+  @wg_quick_path ||= FileUtils.which('wg-quick')
+end
 
 def setup
   unless homebrew_installed?
@@ -53,7 +67,7 @@ def homebrew_installed?
 end
 
 def wireguard_tools_installed?
-  FileUtils.which('wg-quick')
+  wg_quick_path
 end
 
 def check_for_wg_quick_program
@@ -96,11 +110,11 @@ def random_wireguard_config_filepath
 end
 
 def load_wireguard_config(wireguard_config_filename)
-  run("wg-quick up #{wireguard_config_filename}", show: true)
+  run('sudo', wg_quick_path, 'up', wireguard_config_filename, show: true)
 end
 
 def unload_wireguard_config(wireguard_config_filename)
-  run("wg-quick down #{wireguard_config_filename}", show: true)
+  run('sudo', wg_quick_path, 'down', wireguard_config_filename, show: true)
 end
 
 def write_dns_altered_wireguard_config(wireguard_config_filepath, dns_altered_wireguard_config)
