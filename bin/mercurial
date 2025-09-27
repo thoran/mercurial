@@ -1,39 +1,23 @@
 #!/usr/bin/env ruby
 # mercurial
 
-# 20250926
-# 0.5.3
+# 20250927
+# 0.6.0
 
-# Changes since 0.4:
-# -/0: Be able to set DNS.
-# 1. + require 'switches.rb'
-# 2. + switches(), dns_servers(): Parse DNS servers from command line (-d/--dns/--dns_server)
-# 3. ~ up(), switch(), main(): Accept and pass through DNS servers argument.
-# 4. + dns_altered_wireguard_config(): Modifies Wireguard config to use custom DNS servers.
-# 5. + write_dns_altered_wireguard_config(): Creates a temporary config with custom DNS.
-# 6. ~ down(): Clean up /tmp/wireguard/*.conf files.
-# 7. ~ *_filename()/*_filepath()/
-# 8. + require 'MacOS/VPN'
-# 9. ~ up(): Use MacOS::VPN.up?
-# 0/1: Fix exit node repetition bug.
-# 10. + wireguard_configs(): Return config basenames only.
-# 11. + random_wireguard_config(): Select random config by basename, properly excluding current.
-# 12. ~ random_wireguard_config_filepath(): Use basename-based selection to build filepath.
-# 13. ~ up(): Eliminate conditional duplication by reassigning wireguard_config_filepath.
-# 1/2: Fix for when current config missing when finding next random config.
-# 14. ~ random_wireguard_config(): Defer to current_wireguard_config() rather than derive it in place.
-# 15. + current_wireguard_config(): Check for presence of the path before getting the basename.
-# 2/3: Refactor wg-quick path lookup and use sudo when calling wg-quick.
-# 16. + wg_quick_path(): Centralize wg-quick path lookup with memoization.
-# 17. ~ wireguard_tools_installed?(): Use wg_quick_path instead of duplicate lookup.
-# 18. ~ load_wireguard_config(), unload_wireguard_config(): Add sudo and use wg_quick_path.
+# Changes since 0.5:
+# -/0: Change DNS only.
+# 1. ~ switches(): + retain_endpoint
+# 2. ~ main(): Pass switches.retain_endpoint to switch().
+# 3. ~ switch(): Check if retail_endpoint is true and if so get the current wireguard before bringing it down; then bring it up with the wireguard_config given.
+# 4. ~ up(): Conditionally upon a wireguard config being supplied, use that or get a random one.
 
 # Examples:
 # 1. `mercurial setup` installs requisite software.
 # 2. `mercurial switch` brings up the VPN, if need be, or if already up with swap the current for another different exit node.
 # 3. `mercurial` is the same as `mercurial switch`.
 # 4. `mercurial down` brings the VPN down.
-# 5. `mercurial switch --dns_servers 1.1.1.1,1.0.0.1` brings up the VPN with the given DNS servers.
+# 5. `mercurial switch --dns_servers 1.1.1.1,1.0.0.1` drops, then brings up the VPN with the given DNS servers.
+# 6. `mercurial switch --dns_servers 1.1.1.1,1.0.0.1 --retain_endpoint` drops, then brings up the VPN with the given DNS servers without switching endpoints.
 
 # Notes:
 # 1. For automated execution, ensure that /etc/sudoers has an entry like this:
@@ -132,8 +116,14 @@ def dns_altered_wireguard_config(wireguard_config_filepath, dns_servers)
   config.gsub(/^DNS = .+$/, "DNS = #{dns_servers.join(', ')}")
 end
 
-def up(dns_servers = nil)
-  wireguard_config_filepath = random_wireguard_config_filepath
+def up(dns_servers = nil, wireguard_config = nil)
+  wireguard_config_filepath = (
+    if wireguard_config
+      File.join(wireguard_configs_path, wireguard_config)
+    else
+      random_wireguard_config_filepath
+    end
+  )
   if dns_servers
     dns_altered_wireguard_config = dns_altered_wireguard_config(wireguard_config_filepath, dns_servers)
     wireguard_config_filepath = write_dns_altered_wireguard_config(wireguard_config_filepath, dns_altered_wireguard_config)
@@ -169,10 +159,15 @@ def down
   Dir.glob('/tmp/wireguard/*.conf').each{|filename| FileUtils.rm(filename)}
 end
 
-def switch(dns_servers = nil)
+def switch(dns_servers = nil, retain_endpoint: false)
   check_for_wg_quick_program
-  down if up?
-  up(dns_servers)
+  if up?
+    if retain_endpoint
+      wireguard_config = File.basename(current_wireguard_config)
+    end
+    down
+  end
+  up(dns_servers, wireguard_config)
 end
 
 def up?
@@ -183,6 +178,7 @@ def switches
   @switches ||= (
     Switches.new do |s|
       s.set :d, :dns, :dns_servers
+      s.set :r?, :retain?, :retain_endpoint?
     end
   )
 end
@@ -196,7 +192,7 @@ def main
   case ARGV[0]
   when 'setup'; setup
   when 'down'; down if up?
-  when 'switch'; switch(dns_servers)
+  when 'switch'; switch(dns_servers, retain_endpoint: switches.retain_endpoint?)
   else
     switch(dns_servers)
   end
