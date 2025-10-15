@@ -1,28 +1,32 @@
 #!/usr/bin/env ruby
 # mercurial
 
-# 20250927
-# 0.6.0
+# 20251015
+# 0.7.0
 
-# Changes since 0.5:
-# -/0: Change DNS only.
-# 1. ~ switches(): + retain_endpoint
-# 2. ~ main(): Pass switches.retain_endpoint to switch().
-# 3. ~ switch(): Check if retail_endpoint is true and if so get the current wireguard before bringing it down; then bring it up with the wireguard_config given.
-# 4. ~ up(): Conditionally upon a wireguard config being supplied, use that or get a random one.
+# Changes since 0.6:
+# -/0: Allow selection of wireguard config by full path, complete config filename, or partial filepath.
+# 1. ~ switches(): + :c, :config
+# 2. ~ main(): Pass switches.config to switch.
+# 3. ~ switch(): Add conditions to check for the presence of a suppled config, whether it is a full path, or a complete config filename or partial filepath.
+# 4. ~ main(): Fix sub-commandless operation.
 
 # Examples:
 # 1. `mercurial setup` installs requisite software.
-# 2. `mercurial switch` brings up the VPN, if need be, or if already up with swap the current for another different exit node.
+# 2. `mercurial switch` brings up the VPN, if need be, or if already up with swap the current for another different endpoint.
 # 3. `mercurial` is the same as `mercurial switch`.
 # 4. `mercurial down` brings the VPN down.
 # 5. `mercurial switch --dns_servers 1.1.1.1,1.0.0.1` drops, then brings up the VPN with the given DNS servers.
 # 6. `mercurial switch --dns_servers 1.1.1.1,1.0.0.1 --retain_endpoint` drops, then brings up the VPN with the given DNS servers without switching endpoints.
+# 7. `mercurial switch --config /full/path/to/config.conf`
+# 8. `mercurial switch --config ~/config.conf`
+# 9. `mercurial switch --config config.conf` assumes the default configs path
+# 10. `mercurial switch --config config` will do a partial match in the default path
 
 # Notes:
 # 1. For automated execution, ensure that /etc/sudoers has an entry like this:
 #   thoran    ALL = NOPASSWD: /opt/homebrew/bin/wg-quick *
-# 2. Or, that there's a file /etc/sudoers.d/mercurial which the same kind of entry:
+# 2. Or, that there's a file /etc/sudoers.d/mercurial with the same kind of entry:
 #   thoran    ALL = NOPASSWD: /opt/homebrew/bin/wg-quick *
 
 require 'fileutils'
@@ -159,13 +163,32 @@ def down
   Dir.glob('/tmp/wireguard/*.conf').each{|filename| FileUtils.rm(filename)}
 end
 
-def switch(dns_servers = nil, retain_endpoint: false)
+def switch(dns_servers = nil, config: nil, retain_endpoint: false)
   check_for_wg_quick_program
   if up?
     if retain_endpoint
-      wireguard_config = File.basename(current_wireguard_config)
+      wireguard_config = current_wireguard_config
     end
     down
+  end
+  if config
+    wireguard_config = (
+      if config =~ /\//
+        if File.exist?(config)
+          File.basename(config)
+        else
+          puts "#{config} not found."
+          exit
+        end
+      else
+        candidate_config = File.join(wireguard_configs_path, config)
+        if File.exist?(candidate_config)
+          config
+        else
+          File.basename(wireguard_configs_filepaths.detect{|filepath| File.basename(filepath) =~ /#{config}/i})
+        end
+      end
+    )
   end
   up(dns_servers, wireguard_config)
 end
@@ -178,6 +201,7 @@ def switches
   @switches ||= (
     Switches.new do |s|
       s.set :d, :dns, :dns_servers
+      s.set :c, :config
       s.set :r?, :retain?, :retain_endpoint?
     end
   )
@@ -192,9 +216,9 @@ def main
   case ARGV[0]
   when 'setup'; setup
   when 'down'; down if up?
-  when 'switch'; switch(dns_servers, retain_endpoint: switches.retain_endpoint?)
+  when 'switch'; switch(dns_servers, config: switches.config, retain_endpoint: switches.retain_endpoint?)
   else
-    switch(dns_servers)
+    switch(dns_servers, config: switches.config, retain_endpoint: switches.retain_endpoint?)
   end
 end
 
