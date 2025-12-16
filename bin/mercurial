@@ -1,8 +1,8 @@
 #!/usr/bin/env ruby
 # mercurial
 
-# 20251015
-# 0.7.0
+# 20251209
+# 0.7.1
 
 # Changes since 0.6:
 # -/0: Allow selection of wireguard config by full path, complete config filename, or partial filepath.
@@ -10,6 +10,11 @@
 # 2. ~ main(): Pass switches.config to switch.
 # 3. ~ switch(): Add conditions to check for the presence of a suppled config, whether it is a full path, or a complete config filename or partial filepath.
 # 4. ~ main(): Fix sub-commandless operation.
+# 0/1:
+# 5. ~ setup(): Use the correct string for installing Homebrew.
+# 6. + require 'Kernel/require_gem'
+# 7. /require/require_gem/
+# 8. + missing libraries
 
 # Examples:
 # 1. `mercurial setup` installs requisite software.
@@ -29,8 +34,9 @@
 # 2. Or, that there's a file /etc/sudoers.d/mercurial with the same kind of entry:
 #   thoran    ALL = NOPASSWD: /opt/homebrew/bin/wg-quick *
 
-require 'fileutils'
-require 'switches.rb'
+require 'Kernel/require_gem'
+require_gem 'fileutils'
+require_gem 'switches.rb'
 
 require 'FileUtils/which'
 require 'Kernel/run'
@@ -43,7 +49,7 @@ end
 
 def setup
   unless homebrew_installed?
-    run('/usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"', show: true)
+    run('/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"', show: true)
   end
   unless wireguard_tools_installed?
     run('brew install wireguard-tools', show: true)
