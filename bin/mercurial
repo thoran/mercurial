@@ -1,20 +1,14 @@
 #!/usr/bin/env ruby
 # mercurial
 
-# 20251209
-# 0.7.1
+# 20260123
+# 0.8.0
 
-# Changes since 0.6:
-# -/0: Allow selection of wireguard config by full path, complete config filename, or partial filepath.
-# 1. ~ switches(): + :c, :config
-# 2. ~ main(): Pass switches.config to switch.
-# 3. ~ switch(): Add conditions to check for the presence of a suppled config, whether it is a full path, or a complete config filename or partial filepath.
-# 4. ~ main(): Fix sub-commandless operation.
-# 0/1:
-# 5. ~ setup(): Use the correct string for installing Homebrew.
-# 6. + require 'Kernel/require_gem'
-# 7. /require/require_gem/
-# 8. + missing libraries
+# Changes since 0.7:
+# -/0: Be able to output the currently used Wireguard config via a new sub-command 'status'.
+# 1. + status()
+# 2. ~ main(): + status sub-command.
+# 3. Swapped positions of dns_altered_wireguard_config() and write_dns_altered_wireguard_config(), since dns_altered_wireguard_config() is called before write_dns_altered_wireguard_config().
 
 # Examples:
 # 1. `mercurial setup` installs requisite software.
@@ -27,6 +21,7 @@
 # 8. `mercurial switch --config ~/config.conf`
 # 9. `mercurial switch --config config.conf` assumes the default configs path
 # 10. `mercurial switch --config config` will do a partial match in the default path
+# 11. `mercurial status` outputs the currently used Wireguard config.
 
 # Notes:
 # 1. For automated execution, ensure that /etc/sudoers has an entry like this:
@@ -111,6 +106,11 @@ def unload_wireguard_config(wireguard_config_filename)
   run('sudo', wg_quick_path, 'down', wireguard_config_filename, show: true)
 end
 
+def dns_altered_wireguard_config(wireguard_config_filepath, dns_servers)
+  config = File.read(wireguard_config_filepath)
+  config.gsub(/^DNS = .+$/, "DNS = #{dns_servers.join(', ')}")
+end
+
 def write_dns_altered_wireguard_config(wireguard_config_filepath, dns_altered_wireguard_config)
   wireguard_config_filename = File.basename(wireguard_config_filepath)
   FileUtils.mkdir_p('/tmp/wireguard')
@@ -119,11 +119,6 @@ def write_dns_altered_wireguard_config(wireguard_config_filepath, dns_altered_wi
   wireguard_config.puts(dns_altered_wireguard_config)
   wireguard_config.close
   dns_altered_wireguard_config_filepath
-end
-
-def dns_altered_wireguard_config(wireguard_config_filepath, dns_servers)
-  config = File.read(wireguard_config_filepath)
-  config.gsub(/^DNS = .+$/, "DNS = #{dns_servers.join(', ')}")
 end
 
 def up(dns_servers = nil, wireguard_config = nil)
@@ -199,6 +194,10 @@ def switch(dns_servers = nil, config: nil, retain_endpoint: false)
   up(dns_servers, wireguard_config)
 end
 
+def status
+  puts File.basename(current_wireguard_config_filepath)
+end
+
 def up?
   MacOS::VPN.up?
 end
@@ -223,6 +222,7 @@ def main
   when 'setup'; setup
   when 'down'; down if up?
   when 'switch'; switch(dns_servers, config: switches.config, retain_endpoint: switches.retain_endpoint?)
+  when 'status'; status
   else
     switch(dns_servers, config: switches.config, retain_endpoint: switches.retain_endpoint?)
   end
