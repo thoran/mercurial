@@ -1,26 +1,15 @@
 #!/usr/bin/env ruby
 # mercurial
 
-# 20260125
-# 0.9.0
+# 20260227
+# 0.10.0
 
-# Changes since 0.8:
-# -/0: Add robust VPN interface cleanup with lock-based concurrency control; improve error handling via dont_raise; add usage output; track VPN state via JSON temp files; handle orphaned WireGuard interfaces and stuck processes.
-# 1. + require 'json'
-# 2. + require_gem 'sys-proctable'
-# 3. + current_vpn_info(): Read VPN state from JSON temp file.
-# 4. ~ current_wireguard_config_filepath(): Add nil guard for current_vpn_info.
-# 5. + write_vpn_info(): Write VPN state (config path and network interface) to temp file.
-# 6. ~ unload_wireguard_config(): Add dont_raise: true option for graceful failure.
-# 7. ~ up(): Capture network interface name before/after and write to VPN info.
-# 8. ~ down(): Check if interface still exists before attempting destroy, add fallback to remove_wireguard_interfaces.
-# 9. + remove_wireguard_interfaces(): Clean up WireGuard configs by name, remove state files, kill wireguard-go processes.
-# 10. + cleanup_stuck_wg_quick_processes(): Kill stuck wg-quick processes and remove orphaned interfaces.
-# 11. + with_lock(): Implement file-based locking to prevent concurrent mercurial runs.
-# 12. + pid_exists?(): Check if process is running by PID.
-# 13. ~ status(): Add "Not operating" message when VPN is down.
-# 14. + output_usage(): Display help text with commands, options, and examples.
-# 15. ~ main(): Add 'up' command alias and usage output for no/unknown command.
+# Changes since 0.9:
+# -/0: Add JSON output for status; reorganise code; rename output_usage to usage.
+# 1. ~ switches(): + format option (-f, --format).
+# 2. ~ status(): + JSON output when --format json is given, including dns_servers.
+# 3. ~ usage(): Renamed from output_usage().
+# 4. Reorganised helper methods under their parent commands with section comments.
 
 # Examples:
 # 1. `mercurial setup` installs requisite software.
@@ -33,7 +22,8 @@
 # 8. `mercurial switch --config ~/config.conf`
 # 9. `mercurial switch --config config.conf` assumes the default configs path
 # 10. `mercurial switch --config config` will do a partial match in the default path
-# 11. `mercurial status` outputs the currently used Wireguard config.
+# 11. `mercurial status` outputs the currently used Wireguard config as plain text (default).
+# 12. `mercurial status --format json` outputs the currently used Wireguard config as JSON.
 
 # Notes:
 # 1. For automated execution, ensure that /etc/sudoers has an entry like this:
@@ -58,31 +48,6 @@ require 'File/self.grep'
 
 def wg_quick_path
   @wg_quick_path ||= FileUtils.which('wg-quick')
-end
-
-def setup
-  unless homebrew_installed?
-    run('/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"', show: true)
-  end
-  unless wireguard_tools_installed?
-    run('brew install wireguard-tools', show: true)
-  end
-end
-
-def homebrew_installed?
-  FileUtils.which('brew')
-end
-
-def wireguard_tools_installed?
-  wg_quick_path
-end
-
-def check_for_wg_quick_program
-  unless wireguard_tools_installed?
-    puts "wg-quick was not found.  You must install wireguard-tools (installs wg-quick) first."
-    puts "The easist way to install it is by running `mercurial setup`."
-    exit
-  end
 end
 
 def wireguard_config_location
@@ -143,10 +108,17 @@ def write_vpn_info(wireguard_config_filepath:, network_interface:)
   tmpfile.close
 end
 
-def unload_wireguard_config(wireguard_config_file_path)
-  run('sudo', wg_quick_path, 'down', wireguard_config_file_path, show: true, dont_raise: true)
+# begin setup helpers
+def homebrew_installed?
+  FileUtils.which('brew')
 end
 
+def wireguard_tools_installed?
+  wg_quick_path
+end
+# end setup helpers
+
+# begin up helpers
 def dns_altered_wireguard_config(wireguard_config_filepath, dns_servers)
   config = File.read(wireguard_config_filepath)
   config.gsub(/^DNS = .+$/, "DNS = #{dns_servers.join(', ')}")
@@ -161,6 +133,96 @@ def write_dns_altered_wireguard_config(wireguard_config_filepath, dns_altered_wi
   wireguard_config.close
   dns_altered_wireguard_config_filepath
 end
+# end up helpers
+
+# begin down helpers
+def unload_wireguard_config(wireguard_config_file_path)
+  run('sudo', wg_quick_path, 'down', wireguard_config_file_path, show: true, dont_raise: true)
+end
+
+def remove_wireguard_interfaces
+  # Try to get WireGuard config names from runtime directory
+  config_names = Dir.glob('/var/run/wireguard/*.name').map{|f| File.basename(f, '.name')}
+
+  if config_names.any?
+    config_names.each do |config_name|
+      puts "Removing WireGuard interface: #{config_name}..."
+      system("sudo #{wg_quick_path} down #{config_name} 2>/dev/null")
+    end
+  end
+
+  # Force cleanup of any remaining WireGuard state
+  puts "Cleaning up WireGuard state files..."
+  system("sudo rm -f /var/run/wireguard/*.sock 2>/dev/null")
+  system("sudo rm -f /var/run/wireguard/*.name 2>/dev/null")
+
+  # Kill any lingering wireguard-go processes
+  system("sudo pkill -9 wireguard-go 2>/dev/null")
+
+  sleep 2
+end
+# end down helpers
+
+# begin switch helpers
+def check_for_wg_quick_program
+  unless wireguard_tools_installed?
+    puts "wg-quick was not found.  You must install wireguard-tools (installs wg-quick) first."
+    puts "The easist way to install it is by running `mercurial setup`."
+    exit
+  end
+end
+
+def cleanup_stuck_wg_quick_processes
+  # Kill stuck wg-quick processes.
+  Sys::ProcTable.ps.select{|p| p.comm =~ /wg-quick/}.each do |proc|
+    puts "Killing wg-quick process: #{proc.pid}..."
+    run("sudo kill -9 #{proc.pid}", show: true, dont_raise: true)
+  end
+  remove_wireguard_interfaces
+end
+
+def with_lock
+  lockfile = '/tmp/mercurial.lock'
+  if File.exist?(lockfile)
+    lock_age = Time.now - File.mtime(lockfile)
+    if lock_age > 300 # If older than 5 minutes, then the lock is stale.
+      puts "Removing stale lock file (#{lock_age.to_i}s old)"
+      File.delete(lockfile)
+    else
+      if pid_exists?(lockfile)
+        raise "mercurial is already running, exiting."
+      else # The process is dead, so remove stale lock.
+        File.delete(lockfile)
+      end
+    end
+  end
+  File.write(lockfile, Process.pid)
+  begin
+    yield
+  ensure
+    File.delete(lockfile) if File.exist?(lockfile) && File.read(lockfile).to_i == Process.pid
+  end
+end
+
+def pid_exists?(lockfile)
+  pid = File.read(lockfile).to_i
+  !`ps -p #{pid} -o pid=`.strip.empty?
+end
+# end switch helpers
+
+def up?
+  MacOS::VPN.up?
+end
+
+# begin commands
+def setup
+  unless homebrew_installed?
+    run('/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"', show: true)
+  end
+  unless wireguard_tools_installed?
+    run('brew install wireguard-tools', show: true)
+  end
+end
 
 def up(dns_servers = nil, wireguard_config = nil)
   wireguard_config_filepath = (
@@ -174,12 +236,10 @@ def up(dns_servers = nil, wireguard_config = nil)
     dns_altered_wireguard_config = dns_altered_wireguard_config(wireguard_config_filepath, dns_servers)
     wireguard_config_filepath = write_dns_altered_wireguard_config(wireguard_config_filepath, dns_altered_wireguard_config)
   end
-
   before = `wg show interfaces`.strip.split
   load_wireguard_config(wireguard_config_filepath)
   after = `wg show interfaces`.strip.split
   network_interface = (after - before).first
-
   write_vpn_info(wireguard_config_filepath: wireguard_config_filepath, network_interface: network_interface)
 end
 
@@ -236,91 +296,30 @@ end
 
 def status
   if current_wireguard_config_filepath
-    puts current_wireguard_config_filepath
-    puts File.grep(current_wireguard_config_filepath, /DNS/)
-  else
-    puts "Not operating."
-  end
-end
-
-def up?
-  MacOS::VPN.up?
-end
-
-def remove_wireguard_interfaces
-  # Try to get WireGuard config names from runtime directory
-  config_names = Dir.glob('/var/run/wireguard/*.name').map{|f| File.basename(f, '.name')}
-
-  if config_names.any?
-    config_names.each do |config_name|
-      puts "Removing WireGuard interface: #{config_name}..."
-      system("sudo #{wg_quick_path} down #{config_name} 2>/dev/null")
-    end
-  end
-
-  # Force cleanup of any remaining WireGuard state
-  puts "Cleaning up WireGuard state files..."
-  system("sudo rm -f /var/run/wireguard/*.sock 2>/dev/null")
-  system("sudo rm -f /var/run/wireguard/*.name 2>/dev/null")
-
-  # Kill any lingering wireguard-go processes
-  system("sudo pkill -9 wireguard-go 2>/dev/null")
-
-  sleep 2
-end
-
-def cleanup_stuck_wg_quick_processes
-  # Kill stuck wg-quick processes.
-  Sys::ProcTable.ps.select{|p| p.comm =~ /wg-quick/}.each do |proc|
-    puts "Killing wg-quick process: #{proc.pid}..."
-    run("sudo kill -9 #{proc.pid}", show: true, dont_raise: true)
-  end
-  remove_wireguard_interfaces
-end
-
-def with_lock
-  lockfile = '/tmp/mercurial.lock'
-  if File.exist?(lockfile)
-    lock_age = Time.now - File.mtime(lockfile)
-    if lock_age > 300 # If older than 5 minutes, then the lock is stale.
-      puts "Removing stale lock file (#{lock_age.to_i}s old)"
-      File.delete(lockfile)
+    if switches.format == 'json'
+      dns_line = File.grep(current_wireguard_config_filepath, /^DNS/)
+      dns_servers = dns_line.empty? ? [] : dns_line.sub(/^DNS\s*=\s*/, '').split(/,\s*/)
+      status_hash = {
+        config: File.basename(current_wireguard_config_filepath, '.conf'),
+        config_filepath: current_wireguard_config_filepath,
+        network_interface: current_vpn_info['network_interface'],
+        dns_servers: dns_servers
+      }
+      puts JSON.generate(status_hash)
     else
-      if pid_exists?(lockfile)
-        raise "mercurial is already running, exiting."
-      else # The process is dead, so remove stale lock.
-        File.delete(lockfile)
-      end
+      puts current_wireguard_config_filepath
+      puts File.grep(current_wireguard_config_filepath, /DNS/)
+    end
+  else
+    if switches.format == 'json'
+      puts JSON.generate({config: nil})
+    else
+      puts "Not operating."
     end
   end
-  File.write(lockfile, Process.pid)
-  begin
-    yield
-  ensure
-    File.delete(lockfile) if File.exist?(lockfile) && File.read(lockfile).to_i == Process.pid
-  end
 end
 
-def pid_exists?(lockfile)
-  pid = File.read(lockfile).to_i
-  !`ps -p #{pid} -o pid=`.strip.empty?
-end
-
-def switches
-  @switches ||= (
-    Switches.new do |s|
-      s.set :d, :dns, :dns_servers
-      s.set :c, :config
-      s.set :r?, :retain?, :retain_endpoint?
-    end
-  )
-end
-
-def dns_servers
-  switches.dns_servers&.split(',')
-end
-
-def output_usage
+def usage
   puts "Usage: mercurial <command> [options]"
   puts
   puts "Commands:"
@@ -344,17 +343,33 @@ def output_usage
   puts "  mercurial switch --config AU.vpn.mega.nz.conf"
   puts "  mercurial switch --dns_servers 1.1.1.1,1.0.0.1 --retain_endpoint"
 end
+# end commands
+
+def dns_servers
+  switches.dns_servers&.split(',')
+end
+
+def switches
+  @switches ||= (
+    Switches.new do |s|
+      s.set :d, :dns, :dns_servers
+      s.set :c, :config
+      s.set :r?, :retain?, :retain_endpoint?
+      s.set :f, :format
+    end
+  )
+end
 
 def main
   switches
   case ARGV[0]
   when 'setup'; setup
+  when 'up'; switch(dns_servers, config: switches.config, retain_endpoint: switches.retain_endpoint?)
   when 'down'; down if up?
   when 'switch'; switch(dns_servers, config: switches.config, retain_endpoint: switches.retain_endpoint?)
   when 'status'; status
-  when 'up'; switch(dns_servers, config: switches.config, retain_endpoint: switches.retain_endpoint?)
   else
-    output_usage
+    usage
     exit 1
   end
 end
