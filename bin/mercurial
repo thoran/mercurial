@@ -1,8 +1,8 @@
 #!/usr/bin/env ruby
 # mercurial
 
-# 20260227
-# 0.10.0
+# 20260304
+# 0.10.1
 
 # Changes since 0.9:
 # -/0: Add JSON output for status; reorganise code; rename output_usage to usage.
@@ -10,6 +10,9 @@
 # 2. ~ status(): + JSON output when --format json is given, including dns_servers.
 # 3. ~ usage(): Renamed from output_usage().
 # 4. Reorganised helper methods under their parent commands with section comments.
+# 0/1: Update calls to Kernel#run due to interface change from 0.2.0 to 0.3.0.
+# 5. ~ unload_wireguard_config(): /dont_raise: true/raise_on_failure: false/
+# 6. ~ cleanup_stuck_wg_quick_processes(): /dont_raise: true/raise_on_failure: false/
 
 # Examples:
 # 1. `mercurial setup` installs requisite software.
@@ -137,7 +140,7 @@ end
 
 # begin down helpers
 def unload_wireguard_config(wireguard_config_file_path)
-  run('sudo', wg_quick_path, 'down', wireguard_config_file_path, show: true, dont_raise: true)
+  run('sudo', wg_quick_path, 'down', wireguard_config_file_path, show: true, raise_on_failure: false)
 end
 
 def remove_wireguard_interfaces
@@ -176,7 +179,7 @@ def cleanup_stuck_wg_quick_processes
   # Kill stuck wg-quick processes.
   Sys::ProcTable.ps.select{|p| p.comm =~ /wg-quick/}.each do |proc|
     puts "Killing wg-quick process: #{proc.pid}..."
-    run("sudo kill -9 #{proc.pid}", show: true, dont_raise: true)
+    run("sudo kill -9 #{proc.pid}", show: true, raise_on_failure: false)
   end
   remove_wireguard_interfaces
 end
