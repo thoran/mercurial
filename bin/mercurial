@@ -1,18 +1,8 @@
 #!/usr/bin/env ruby
 # mercurial
 
-# 20260304
-# 0.10.1
-
-# Changes since 0.9:
-# -/0: Add JSON output for status; reorganise code; rename output_usage to usage.
-# 1. ~ switches(): + format option (-f, --format).
-# 2. ~ status(): + JSON output when --format json is given, including dns_servers.
-# 3. ~ usage(): Renamed from output_usage().
-# 4. Reorganised helper methods under their parent commands with section comments.
-# 0/1: Update calls to Kernel#run due to interface change from 0.2.0 to 0.3.0.
-# 5. ~ unload_wireguard_config(): /dont_raise: true/raise_on_failure: false/
-# 6. ~ cleanup_stuck_wg_quick_processes(): /dont_raise: true/raise_on_failure: false/
+# 20260807
+# 0.11.0
 
 # Examples:
 # 1. `mercurial setup` installs requisite software.
