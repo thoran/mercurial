@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## 20260815
+
+0.11.1: Vendor Regexp/to_regexp.rb, which was resolving from RUBYLIB rather than from the repository.
+
+1. + lib/Regexp/to_regexp.rb. MacOS/IfConfig requires it and it had never been vendored, so it resolved here only because RUBYLIB supplies it and nowhere else. A Homebrew install, which has no RUBYLIB of its own, is what exposed it: the installed mercurial could not load at all.
+2. vendor_requires named this file at the start of the tap work and it went unacted upon until the formula was converted and the program run. Reporting it is not the same as fixing it.
+
+
 ## 20260807
 
 0.11.0: Add a CHANGELOG in the form changelogger writes, and retire the Changes section from the script header.

@@ -1,8 +1,8 @@
 #!/usr/bin/env ruby
 # mercurial
 
-# 20260807
-# 0.11.0
+# 20260815
+# 0.11.1
 
 # Examples:
 # 1. `mercurial setup` installs requisite software.
