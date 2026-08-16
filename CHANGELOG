@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 20260816
+
+0.11.2: Populate .gitignore, which had been committed empty.
+
+1. ~ .gitignore: 47 lines, covering gem builds, bundler, RDoc and YARD output, .DS_Store, editor files, the Ruby version managers, test artefacts and .claude. The file existed and was empty, which git-boot creates it as and nothing had since filled in.
+
+
 ## 20260815
 
 0.11.1: Vendor Regexp/to_regexp.rb, which was resolving from RUBYLIB rather than from the repository.
