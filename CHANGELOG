@@ -2,6 +2,15 @@
 
 ## 20260821
 
+0.13.1: + LICENSE, and the README section naming it.
+
+1. + LICENSE: the MIT text, copyright 2025-2026 thoran. The year is that of the first commit.
+2. + README.md: a License section, saying MIT, last as the four repositories here which already had one have it.
+3. ~ bin/mercurial: /0.13.0/0.13.1/, and the date.
+
+
+## 20260821
+
 0.13.0: Update the two vendored libraries which had drifted, and drop the twenty-two files nothing reaches.
 
 1. ~ lib/File/self.grep.rb: 0.0.0 --> 0.0.1; lib/FileUtils/where.rb: 0.0.3 --> 0.1.0. Taken from ~/lib/ruby by vendor_requires --overwrite, the repository copy being the older in both cases.
