@@ -2,6 +2,18 @@
 
 ## 20260821
 
+0.13.0: Update the two vendored libraries which had drifted, and drop the twenty-two files nothing reaches.
+
+1. ~ lib/File/self.grep.rb: 0.0.0 --> 0.0.1; lib/FileUtils/where.rb: 0.0.3 --> 0.1.0. Taken from ~/lib/ruby by vendor_requires --overwrite, the repository copy being the older in both cases.
+2. self.grep 0.0.1 adds the require of Regexp/to_regexp which 0.0.0 was missing. In isolation the old copy raises NoMethodError on File.grep, which status() calls in both its branches, but nothing was broken: MacOS/IfConfig pulls Regexp/to_regexp in first, so by the time status() runs the method is there. Checked against the script's whole require set rather than the one file.
+3. - Twenty-two files from lib, nothing reaching them once where.rb was updated: it no longer requires Platform/OS or File/self.basename_without_extname, so Files.rb, Ordinal, Version.rb, the Platform tree and the Array and Module extensions behind them fall away with it. Thirty-five files to thirteen.
+4. Files.rb was what required ostruct, which audit_requires had reported as answered only by an undeclared gem. That require is gone with it. The formula still wants its ostruct resource, switches.rb declaring ostruct as a dependency of its own.
+5. Checked rather than assumed: audit_requires reports nothing missing against the thirteen, and each call the script makes was run against the trimmed lib — MacOS::VPN.up?, IfConfig.up_interfaces, IfConfig.destroy_interface, FileUtils.which, File.grep, Sys::ProcTable.ps and run() with show:.
+6. IfConfig here was already 0.7.0, and run.rb already 0.3.0, so neither carried the fault startor's 0.6.0 IfConfig did.
+
+
+## 20260821
+
 0.12.1: Fetch Homebrew's installer from where it now lives.
 
 1. ~ setup(): .../install/master/install --> .../install/HEAD/install.sh. The old URL answers 404, so curl -fsSL fetched nothing, bash ran an empty script, and the `brew install wireguard-tools` after it failed for want of brew. The interpreter was already right here, this being bash rather than the ruby startor had.
