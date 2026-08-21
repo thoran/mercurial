@@ -2,6 +2,15 @@
 
 ## 20260821
 
+0.12.1: Fetch Homebrew's installer from where it now lives.
+
+1. ~ setup(): .../install/master/install --> .../install/HEAD/install.sh. The old URL answers 404, so curl -fsSL fetched nothing, bash ran an empty script, and the `brew install wireguard-tools` after it failed for want of brew. The interpreter was already right here, this being bash rather than the ruby startor had.
+2. It went unnoticed because setup() only reaches that line where brew is absent, which it has not been on any machine this has run on.
+3. The form is the one homebrew-tap's own README gives, which is Homebrew's published line. startor carried the same dead URL and is fixed at its 0.9.1.
+
+
+## 20260821
+
 0.12.0: + README.md, including what was in the headers.
 
 1. + README.md. Description, Installation, Dependencies, Usage, Notes and Contributing, following the shape of the READMEs the other programs in the tap carry.

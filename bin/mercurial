@@ -2,7 +2,7 @@
 # mercurial
 
 # 20260821
-# 0.12.0
+# 0.12.1
 
 require 'json'
 
@@ -188,7 +188,7 @@ end
 # begin commands
 def setup
   unless homebrew_installed?
-    run('/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"', show: true)
+    run('/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"', show: true)
   end
   unless wireguard_tools_installed?
     run('brew install wireguard-tools', show: true)
