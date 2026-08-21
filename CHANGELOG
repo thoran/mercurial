@@ -1,5 +1,24 @@
 # CHANGELOG
 
+## 20260821
+
+0.12.0: + README.md, including what was in the headers.
+
+1. + README.md. Description, Installation, Dependencies, Usage, Notes and Contributing, following the shape of the READMEs the other programs in the tap carry.
+2. The Description says what the name does not: this is a WireGuard endpoint switcher and has nothing to do with the version control system, which is the first thing anyone reading the tap's list would wonder.
+3. The Usage section covers the five commands and the four switches, the --config resolution among them: a path is taken as given, a name is looked for in ~/.config/wireguard, and anything else is matched against the configuration names case insensitively.
+4. The Notes record the sudoers entries wanted for unattended use, the state kept in /tmp/mercurial-*.tmp, the lock and its five minute staleness, and why a switch clears away stuck processes and interfaces before it starts.
+5. - The Examples and Notes sections from the script header. The README holds that record now, and keeping both invites them to disagree, which they had: Examples item 3 said `mercurial` is the same as `mercurial switch`, and that stopped being so at 0.9.0, whose item 15 reads "~ main(): Add 'up' command alias and usage output for no/unknown command". It went three versions saying otherwise, which is the argument for one record rather than two.
+6. Ten of the twelve examples are in the README's Usage, `mercurial setup` being in its Installation and the bare invocation its Note 5. The sudoers entries the Notes carried are its Note 2, written against your_username rather than mine.
+7. Examples 7 and 8 gave `--config /full/path/to/config.conf` and `--config ~/config.conf`, which switch() does not honour: a config matching /\// is checked for existence and then reduced by File.basename, and up() joins that name to the configs path. A configuration kept elsewhere is never opened. The README says what happens rather than what was intended, and the code is left alone, that being a behaviour to settle rather than to document away.
+8. The README's Usage mirrors the script's own usage(), both the five commands and the switches, with the short forms the Examples never gave: -d, -c, -r and -f. --format is not among the options usage() prints, though :format has been in switches() since 0.10.0, which is where the JSON output came from.
+9. Where the only configuration in ~/.config/wireguard is the one already up, random_wireguard_config() draws from an empty list and returns nil, and File.join raises TypeError. The README says to keep more than one. The behaviour is left alone.
+10. The Notes the header carried gave two NOPASSWD entries, for wg-quick and /bin/kill, and called that enough for automated execution. A run reaches sudo six ways, not two: wg-quick up and down, rm -f over /var/run/wireguard and pkill for wireguard-go in the cleanup, kill -9 for a stuck wg-quick, and ifconfig destroy where the interface survives the down. The README gives five entries and names all six calls.
+11. What the header documented was a subset of what this machine has had configured since May: /etc/sudoers.d/thoran already carries the rm, pkill and ifconfig entries, which is why the omission never showed. The record was incomplete rather than the setup.
+12. The wg-quick path in those entries is Homebrew's on Apple silicon. The script takes whatever FileUtils.which finds, so the README says to match `command -v wg-quick` rather than to copy the path.
+13. ~ Note 1, which had the interfaces handled through ifconfig and networksetup. networksetup is startor's, for the SOCKS proxy, and appears nowhere in this repository.
+
+
 ## 20260816
 
 0.11.2: Populate .gitignore, which had been committed empty.

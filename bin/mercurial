@@ -1,30 +1,8 @@
 #!/usr/bin/env ruby
 # mercurial
 
-# 20260816
-# 0.11.2
-
-# Examples:
-# 1. `mercurial setup` installs requisite software.
-# 2. `mercurial switch` brings up the VPN, if need be, or if already up with swap the current for another different endpoint.
-# 3. `mercurial` is the same as `mercurial switch`.
-# 4. `mercurial down` brings the VPN down.
-# 5. `mercurial switch --dns_servers 1.1.1.1,1.0.0.1` drops, then brings up the VPN with the given DNS servers.
-# 6. `mercurial switch --dns_servers 1.1.1.1,1.0.0.1 --retain_endpoint` drops, then brings up the VPN with the given DNS servers without switching endpoints.
-# 7. `mercurial switch --config /full/path/to/config.conf`
-# 8. `mercurial switch --config ~/config.conf`
-# 9. `mercurial switch --config config.conf` assumes the default configs path
-# 10. `mercurial switch --config config` will do a partial match in the default path
-# 11. `mercurial status` outputs the currently used Wireguard config as plain text (default).
-# 12. `mercurial status --format json` outputs the currently used Wireguard config as JSON.
-
-# Notes:
-# 1. For automated execution, ensure that /etc/sudoers has an entry like this:
-#   thoran    ALL = NOPASSWD: /opt/homebrew/bin/wg-quick *
-#   thoran    ALL = NOPASSWD: /bin/kill
-# 2. Or, that there's a file /etc/sudoers.d/mercurial with the same kind of entry:
-#   thoran    ALL = NOPASSWD: /opt/homebrew/bin/wg-quick *
-#   thoran    ALL = NOPASSWD: /bin/kill
+# 20260821
+# 0.12.0
 
 require 'json'
 
